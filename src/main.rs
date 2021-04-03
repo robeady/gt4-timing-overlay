@@ -3,6 +3,7 @@ use process_memory::{Architecture, Pid, ProcessHandleExt, TryIntoProcessHandle};
 
 mod game_data;
 mod processes;
+mod ps2_types;
 mod scan_memory;
 mod ui;
 mod window;
@@ -20,8 +21,4 @@ fn main() {
 
     let gd = GameData::connect(handle);
     ui::render_window(gd);
-
-    // find memory locations of magic numbers
-    // calculate memory location of data block
-    // every second, re-read values and calculate gaps
 }
