@@ -1,8 +1,15 @@
+use game_data::GameData;
 use process_memory::{Architecture, Pid, ProcessHandleExt, TryIntoProcessHandle};
 
-mod automobile;
+mod game_data;
 mod processes;
-mod scan;
+mod scan_memory;
+mod ui;
+mod window;
+
+pub struct Locations {
+    pub auto_nan_offsets: Vec<usize>,
+}
 
 fn main() {
     let pid = processes::get_pcsx2_process_id();
@@ -11,13 +18,8 @@ fn main() {
         .unwrap()
         .set_arch(Architecture::Arch32Bit);
 
-    let mut sig = Vec::new();
-    sig.extend_from_slice(&[0xFF; 64]);
-    sig.extend_from_slice(&[0xA3, 0x70, 0x7D, 0x3F]);
-    let offsets = scan::find_all_offsets(&sig, handle);
-    println!("{:?}", offsets);
-
-    automobile::read_automobiles(offsets[0], handle);
+    let gd = GameData::connect(handle);
+    ui::render_window(gd);
 
     // find memory locations of magic numbers
     // calculate memory location of data block

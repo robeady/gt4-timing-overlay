@@ -1,0 +1,39 @@
+use imgui::*;
+
+use crate::{
+    game_data::{Automobile, GameData},
+    window::App,
+};
+
+pub fn render_window(game_data: GameData) {
+    let window_size = [300.0, 300.0];
+    let app = App::init("GT4 timing", window_size);
+    app.main_loop(move |_, ui| {
+        let mut autos: Vec<Automobile> = Vec::new();
+        // autos = game_data.read_autos();
+
+        let styles = ui.push_style_var(StyleVar::WindowRounding(0f32));
+
+        Window::new(im_str!("GT4 Timing"))
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .position([0f32, 0f32], Condition::Appearing)
+            .size(window_size, Condition::Appearing)
+            .build(ui, || {
+                ui.text(im_str!("Hello world!"));
+                ui.separator();
+                for auto in autos.iter() {
+                    ui.text(format!("{:.1}", auto.meters_driven_in_current_lap))
+                }
+                ui.separator();
+                let mouse_pos = ui.io().mouse_pos;
+                ui.text(format!(
+                    "Mouse Position: ({:.1},{:.1})",
+                    mouse_pos[0], mouse_pos[1]
+                ));
+            });
+
+        styles.pop(&ui);
+    });
+}
