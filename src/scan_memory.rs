@@ -62,12 +62,18 @@ pub fn find_all_offsets(needle: &[u8], handle: ProcessHandle) -> Vec<usize> {
         while chunk_offset < upper {
             let member = DataMember::<[u8; CHUNK_SIZE]>::new_offset(handle, vec![chunk_offset]);
             let haystack = member.read().unwrap();
-            haystack
-                .windows(needle.len())
-                .enumerate()
-                .filter_map(|(offset, window)| if window == needle { Some(offset) } else { None })
-                .for_each(|offset| matches.push(chunk_offset + offset));
 
+            let mut window_start = 0;
+            while window_start + needle.len() <= haystack.len() {
+                let window = &haystack[window_start..(window_start + needle.len())];
+                if window == needle {
+                    matches.push(chunk_offset + window_start);
+                    // don't return overlapping matches
+                    window_start += needle.len();
+                } else {
+                    window_start += 1;
+                }
+            }
             // TODO: this chunk handling is rather hacky
             // need overlap between chunks
             let old_chunk_offset = chunk_offset;
