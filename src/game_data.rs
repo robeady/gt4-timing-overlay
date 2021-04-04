@@ -19,7 +19,7 @@ const BEFORE_NANS: usize = 140;
 
 // 4256 bytes
 // each struct starts a bit before the NaN block, guess 50 bytes
-#[repr(C, packed(1))]
+#[repr(C)]
 #[derive(Derivative, Clone, Copy)]
 #[derivative(Debug)]
 pub struct Automobile {
