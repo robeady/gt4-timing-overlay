@@ -1,11 +1,19 @@
-use std::mem::size_of;
+use std::{
+    cmp::{min, Ordering},
+    collections::BTreeMap,
+    f32::INFINITY,
+    mem::size_of,
+};
 
 use crate::{
-    ps2_types::{Ps2Memory, Ps2Ptr, Ps2String},
+    ps2_types::{Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2String},
     scan_memory,
 };
 use derivative::Derivative;
+use ordered_float::OrderedFloat;
 use process_memory::{DataMember, Memory, ProcessHandle};
+
+const NUM_CARS: usize = 6;
 
 const BEFORE_NANS: usize = 140;
 
@@ -36,13 +44,13 @@ pub struct Automobile {
     pub meters_driven_in_current_lap: f32,
     #[derivative(Debug = "ignore")]
     _unkz: [u8; 4],
-    implicit_current_lap: u16, // from decompiler
+    pub implicit_current_lap: i16, // from decompiler
     #[derivative(Debug = "ignore")]
     _unk100_2: [u8; 78],
     pub almost_rpm: f32, // + 1396
     #[derivative(Debug = "ignore")]
     _unk32: [u8; 32],
-    gear: u8, // + 1432
+    pub gear: u8, // + 1432
     #[derivative(Debug = "ignore")]
     _unk274: [u8; 275],
     pub rpm: f32, // + 1708
@@ -59,12 +67,20 @@ pub struct Automobile {
 
 static_assertions::assert_eq_size!([u8; 4256], Automobile);
 
+impl Automobile {
+    pub fn progress(&self, track_length: f32) -> OrderedFloat<f32> {
+        let lap: f32 = self.implicit_current_lap.into();
+        (lap + self.meters_driven_in_current_lap / track_length).into()
+    }
+}
+
 // size unknown, at least 5500 bytes or so
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct CarSpec {
     unknown: [u8; 72],
     pub mass: f32,
+    // more stuff
 }
 
 #[repr(C)]
@@ -119,31 +135,26 @@ pub enum TuningTable {
     REAR_TIRE = 26,
 }
 
+type TimeMs = i32;
+type LapNumber = i16;
+
 pub struct GameData {
     pub ps2: Ps2Memory,
+    /// for each car, a map from distance through the race to time at which this distance was reached
+    pub car_checkpoints: [BTreeMap<OrderedFloat<f32>, TimeMs>; NUM_CARS],
 }
 
-// offset from EE main memory base to start of NaN block for automobiles[1]
+// offset from EE main memory base to start of NaN block for cars[1]
 const FIRST_NAN_OFFSET_FROM_EE_BASE: usize = 0x01C0EEA4;
 
 impl GameData {
-    const fn automobiles_start_address(&self) -> usize {
-        return self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE
-            - BEFORE_NANS  // go to start of Automobile struct
-            - size_of::<Automobile>(); // that was entry 1, go to entry 0
-    }
-
-    const fn entries_start_address(&self) -> usize {
-        return self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
-    }
-
     pub fn connect(process_handle: ProcessHandle) -> GameData {
-        println!("Finding autos");
-        let mut autos_sig = Vec::new();
-        autos_sig.extend_from_slice(&[0xFF; 64]); // these are the NaNs
-        autos_sig.extend_from_slice(&[0xA3, 0x70, 0x7D, 0x3F]);
-        let offsets = scan_memory::find_all_offsets(&autos_sig, process_handle);
-        println!("Found autos at {:?}", offsets);
+        println!("Finding cars");
+        let mut cars_sig = Vec::new();
+        cars_sig.extend_from_slice(&[0xFF; 64]); // these are the NaNs
+        cars_sig.extend_from_slice(&[0xA3, 0x70, 0x7D, 0x3F]);
+        let offsets = scan_memory::find_all_offsets(&cars_sig, process_handle);
+        println!("Found cars at {:?}", offsets);
 
         if offsets.len() != 5 {
             panic!(
@@ -160,22 +171,92 @@ impl GameData {
                 ee_base_address,
                 pcsx2_process_handle: process_handle,
             },
+            car_checkpoints: [
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+            ],
         };
     }
 
-    pub fn read_autos(&self) -> Vec<Automobile> {
+    pub fn sample_car_checkpoints(&mut self) {
+        let autos = self.read_cars();
+        let race_time = self.read_race_time();
+        let track_length = self.read_track_length();
+        for i in 0..NUM_CARS {
+            self.car_checkpoints[i].insert(autos[i].progress(track_length), race_time);
+        }
+    }
+
+    pub fn gap_to_leader_ms(&self, car: usize) -> Option<f32> {
+        let cars = self.read_cars();
+        let current_time = self.read_race_time() as f32;
+        let track_length = self.read_track_length();
+        let progress_to_find = cars[car].progress(track_length);
+        let mut leader_time: Option<f32> = None;
+        for i in 0..NUM_CARS {
+            if i == car {
+                continue;
+            }
+            let min_greater = self.car_checkpoints[i].range(progress_to_find..).next();
+            let max_less = self.car_checkpoints[i]
+                .range(..progress_to_find)
+                .next_back();
+
+            if let (Some(min_greater), Some(max_less)) = (min_greater, max_less) {
+                // linearly interpolate
+                let alpha: OrderedFloat<f32> =
+                    (progress_to_find - *max_less.0) / (*min_greater.0 - *max_less.0);
+                let interpolated_time: f32 =
+                    *max_less.1 as f32 + alpha.into_inner() * (*min_greater.1 - *max_less.1) as f32;
+
+                if let Some(t) = leader_time {
+                    if t > interpolated_time {
+                        leader_time = Some(interpolated_time)
+                    }
+                } else {
+                    leader_time = Some(interpolated_time);
+                }
+            }
+        }
+        return leader_time.map(|t| current_time - t);
+    }
+
+    pub fn read_cars(&self) -> Vec<Automobile> {
+        let cars_start_address = self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE
+        - BEFORE_NANS  // go to start of Automobile struct
+        - size_of::<Automobile>(); // that was entry 1, go to entry 0
         let member = DataMember::<[Automobile; 6]>::new_offset(
             self.ps2.pcsx2_process_handle,
-            vec![self.automobiles_start_address()],
+            vec![cars_start_address],
         );
-        return member.read().unwrap().to_vec();
+        member.read().unwrap().to_vec()
     }
 
     pub fn read_entries(&self) -> Vec<Entry> {
+        let entries_start_address =
+            self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
         let member = DataMember::<[Entry; 6]>::new_offset(
             self.ps2.pcsx2_process_handle,
-            vec![self.entries_start_address()],
+            vec![entries_start_address],
         );
-        return member.read().unwrap().to_vec();
+        member.read().unwrap().to_vec()
+    }
+
+    pub fn read_race_time(&self) -> TimeMs {
+        let race_time_address = self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0xA4A0;
+        let member = DataMember::<TimeMs>::new_offset(
+            self.ps2.pcsx2_process_handle,
+            vec![race_time_address],
+        );
+        member.read().unwrap()
+    }
+
+    pub fn read_track_length(&self) -> f32 {
+        let track_length_pointer_chain = Ps2PtrChain::<f32>::new(&[0x01C19694, 20]);
+        track_length_pointer_chain.get(&self.ps2)
     }
 }

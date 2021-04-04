@@ -13,6 +13,10 @@ pub struct Ps2Memory {
 pub struct Ps2Ptr<T>(u32, PhantomData<T>);
 
 impl<T: Copy> Ps2Ptr<T> {
+    pub fn new(offset: u32) -> Self {
+        Self(offset, PhantomData)
+    }
+
     pub fn get(&self, ps2_memory: &Ps2Memory) -> T {
         let ptr = self.0 as usize;
         let addr = match ptr {
@@ -24,6 +28,44 @@ impl<T: Copy> Ps2Ptr<T> {
         return DataMember::new_offset(ps2_memory.pcsx2_process_handle, vec![addr])
             .read()
             .unwrap();
+    }
+}
+
+pub struct Ps2PtrChain<'a, T>(&'a [u32], PhantomData<T>);
+
+impl<'a, T: Copy> Ps2PtrChain<'a, T> {
+    pub fn new(offsets: &'a [u32]) -> Self {
+        if offsets.len() == 0 {
+            panic!("0 offsets provided when creating pointer chain")
+        }
+        Self(offsets, PhantomData)
+    }
+
+    pub fn get(&self, ps2_memory: &Ps2Memory) -> T {
+        let mut ptr = 0u32;
+        let (&last_offset, offsets) = self.0.split_last().unwrap();
+        for &offset in offsets {
+            let addr = ptr + offset;
+            let mapped_addr = match addr {
+                0x00000000..=0x01FFFFFF => ps2_memory.ee_base_address as u32 + addr,
+                0x20000000..=0x21FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x20000000,
+                0x30000000..=0x31FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x30000000,
+                _ => panic!("unsupported PS2 pointer address {:x} a", addr),
+            } as usize;
+            ptr = DataMember::<u32>::new_offset(ps2_memory.pcsx2_process_handle, vec![mapped_addr])
+                .read()
+                .unwrap();
+        }
+        let addr = ptr + last_offset;
+        let mapped_addr = match addr {
+            0x00000000..=0x01FFFFFF => ps2_memory.ee_base_address as u32 + addr,
+            0x20000000..=0x21FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x20000000,
+            0x30000000..=0x31FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x30000000,
+            _ => panic!("unsupported PS2 pointer address {:x} a", addr),
+        } as usize;
+        DataMember::<T>::new_offset(ps2_memory.pcsx2_process_handle, vec![mapped_addr])
+            .read()
+            .unwrap()
     }
 }
 

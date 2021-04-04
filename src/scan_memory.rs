@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{fmt, mem::size_of};
 
 use process_memory::{DataMember, Memory, ProcessHandle};
 use winapi::{
@@ -61,17 +61,28 @@ pub fn find_all_offsets(needle: &[u8], handle: ProcessHandle) -> Vec<usize> {
         let mut chunk_offset = lower;
         while chunk_offset < upper {
             let member = DataMember::<[u8; CHUNK_SIZE]>::new_offset(handle, vec![chunk_offset]);
-            let haystack = member.read().unwrap();
-
-            let mut window_start = 0;
-            while window_start + needle.len() <= haystack.len() {
-                let window = &haystack[window_start..(window_start + needle.len())];
-                if window == needle {
-                    matches.push(chunk_offset + window_start);
-                    // don't return overlapping matches
-                    window_start += needle.len();
-                } else {
-                    window_start += 1;
+            match member.read() {
+                Err(e) => {
+                    println!(
+                        "error reading chunk 0x{:x}..0x{:x} in region {:?}: {}",
+                        chunk_offset,
+                        chunk_offset + CHUNK_SIZE,
+                        DebugMBI(region),
+                        e
+                    )
+                }
+                Ok(haystack) => {
+                    let mut window_start = 0;
+                    while window_start + needle.len() <= haystack.len() {
+                        let window = &haystack[window_start..(window_start + needle.len())];
+                        if window == needle {
+                            matches.push(chunk_offset + window_start);
+                            // don't return overlapping matches
+                            window_start += needle.len();
+                        } else {
+                            window_start += 1;
+                        }
+                    }
                 }
             }
             // TODO: this chunk handling is rather hacky
@@ -91,18 +102,18 @@ pub fn find_all_offsets(needle: &[u8], handle: ProcessHandle) -> Vec<usize> {
     return matches;
 }
 
-// struct DebugMBI<'a>(&'a MEMORY_BASIC_INFORMATION);
+struct DebugMBI<'a>(&'a MEMORY_BASIC_INFORMATION);
 
-// impl<'a> fmt::Debug for DebugMBI<'a> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         f.debug_struct("MEMORY_BASIC_INFORMATION")
-//             .field("BaseAddress", &self.0.BaseAddress)
-//             .field("AllocationBase", &self.0.AllocationBase)
-//             .field("AllocationProtect", &self.0.AllocationProtect)
-//             .field("RegionSize", &self.0.RegionSize)
-//             .field("State", &self.0.State)
-//             .field("Protect", &self.0.Protect)
-//             .field("Type", &self.0.Type)
-//             .finish()
-//     }
-// }
+impl<'a> fmt::Debug for DebugMBI<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MEMORY_BASIC_INFORMATION")
+            .field("BaseAddress", &self.0.BaseAddress)
+            .field("AllocationBase", &self.0.AllocationBase)
+            .field("AllocationProtect", &self.0.AllocationProtect)
+            .field("RegionSize", &self.0.RegionSize)
+            .field("State", &self.0.State)
+            .field("Protect", &self.0.Protect)
+            .field("Type", &self.0.Type)
+            .finish()
+    }
+}

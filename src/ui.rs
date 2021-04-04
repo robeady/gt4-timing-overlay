@@ -5,14 +5,18 @@ use crate::{
     window::App,
 };
 
-pub fn render_window(game_data: GameData) {
+pub fn render_window(mut game_data: GameData) {
     let window_size = [400.0, 300.0];
     let app = App::init("GT4 timing", window_size);
     app.main_loop(move |_, ui| {
-        let mut autos: Vec<Automobile> = Vec::new();
+        let mut cars: Vec<Automobile> = Vec::new();
         let mut entries: Vec<Entry> = Vec::new();
-        autos = game_data.read_autos();
+        cars = game_data.read_cars();
         entries = game_data.read_entries();
+
+        game_data.sample_car_checkpoints();
+
+        let track_length = game_data.read_track_length();
 
         let styles = ui.push_style_var(StyleVar::WindowRounding(0f32));
 
@@ -24,13 +28,15 @@ pub fn render_window(game_data: GameData) {
             .size(window_size, Condition::Appearing)
             .build(ui, || {
                 ui.text(im_str!("Hello world!"));
+                ui.text(im_str!("track is {:.3}km long", track_length / 1000.0));
                 ui.separator();
                 for i in 0..6 {
-                    let mass = autos[i].car_spec.get(&game_data.ps2).mass;
+                    let mass = cars[i].car_spec.get(&game_data.ps2).mass;
                     let name: String = entries[i].car_name_short.into();
+                    let gap_to_leader = game_data.gap_to_leader_ms(i).unwrap_or(f32::NAN) / 1000f32;
                     ui.text(format!(
-                        "{} - {:.1} {:.0}kg",
-                        name, autos[i].meters_driven_in_current_lap, mass
+                        "+{:.1} {}  ({:.1} {:.0}kg)",
+                        gap_to_leader, name, cars[i].meters_driven_in_current_lap, mass
                     ))
                 }
                 ui.separator();
