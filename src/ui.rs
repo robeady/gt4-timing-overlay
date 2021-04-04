@@ -1,18 +1,13 @@
 use imgui::*;
 
-use crate::{
-    game_data::{Automobile, Entry, GameData},
-    window::App,
-};
+use crate::{game_data::GameData, window::App};
 
 pub fn render_window(mut game_data: GameData) {
     let window_size = [400.0, 300.0];
     let app = App::init("GT4 timing", window_size);
     app.main_loop(move |_, ui| {
-        let mut cars: Vec<Automobile> = Vec::new();
-        let mut entries: Vec<Entry> = Vec::new();
-        cars = game_data.read_cars();
-        entries = game_data.read_entries();
+        let cars = game_data.read_cars();
+        let entries = game_data.read_entries();
 
         game_data.sample_car_checkpoints();
 
