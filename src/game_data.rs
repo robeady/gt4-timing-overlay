@@ -142,6 +142,7 @@ pub struct GameData {
     pub ps2: Ps2Memory,
     /// for each car, a map from distance through the race to time at which this distance was reached
     pub car_checkpoints: [BTreeMap<OrderedFloat<f32>, TimeMs>; NUM_CARS],
+    pub race_time: TimeMs,
 }
 
 // offset from EE main memory base to start of NaN block for cars[1]
@@ -179,15 +180,25 @@ impl GameData {
                 BTreeMap::new(),
                 BTreeMap::new(),
             ],
+            race_time: 0,
         };
     }
 
     pub fn sample_car_checkpoints(&mut self) {
         let autos = self.read_cars();
-        let race_time = self.read_race_time();
+        let new_race_time = self.read_race_time();
+        if new_race_time < self.race_time {
+            for i in 0..NUM_CARS {
+                self.car_checkpoints[i].clear()
+            }
+        }
+        self.race_time = new_race_time;
         let track_length = self.read_track_length();
         for i in 0..NUM_CARS {
-            self.car_checkpoints[i].insert(autos[i].progress(track_length), race_time);
+            let progress = autos[i].progress(track_length);
+            if progress >= 1f32.into() {
+                self.car_checkpoints[i].insert(progress, self.race_time);
+            }
         }
     }
 
@@ -196,6 +207,10 @@ impl GameData {
         let current_time = self.read_race_time() as f32;
         let track_length = self.read_track_length();
         let progress_to_find = cars[car].progress(track_length);
+        if progress_to_find < 1f32.into() {
+            // cars still on the grid
+            return None;
+        }
         let mut leader_time: Option<f32> = None;
         for i in 0..NUM_CARS {
             if i == car {
