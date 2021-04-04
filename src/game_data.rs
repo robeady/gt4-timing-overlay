@@ -121,16 +121,20 @@ pub enum TuningTable {
 
 pub struct GameData {
     pub ps2: Ps2Memory,
-    auto_nan_offsets: Vec<usize>,
 }
 
+// offset from EE main memory base to start of NaN block for automobiles[1]
+const FIRST_NAN_OFFSET_FROM_EE_BASE: usize = 0x01C0EEA4;
+
 impl GameData {
-    const fn automobiles_start(first_nan: usize) -> usize {
-        return first_nan - BEFORE_NANS - size_of::<Automobile>();
+    const fn automobiles_start_address(&self) -> usize {
+        return self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE
+            - BEFORE_NANS  // go to start of Automobile struct
+            - size_of::<Automobile>(); // that was entry 1, go to entry 0
     }
 
-    const fn entries_start(first_nan: usize) -> usize {
-        return first_nan - 0x2E0A4;
+    const fn entries_start_address(&self) -> usize {
+        return self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
     }
 
     pub fn connect(process_handle: ProcessHandle) -> GameData {
@@ -141,30 +145,37 @@ impl GameData {
         let offsets = scan_memory::find_all_offsets(&autos_sig, process_handle);
         println!("Found autos at {:?}", offsets);
 
-        let ee_base_address = offsets[0] - 0x01C0EEA4;
+        if offsets.len() != 5 {
+            panic!(
+                "found {} NaN blocks at {:?}, expected 5",
+                offsets.len(),
+                offsets
+            )
+        }
+
+        let ee_base_address = offsets[0] - FIRST_NAN_OFFSET_FROM_EE_BASE;
 
         return GameData {
             ps2: Ps2Memory {
                 ee_base_address,
                 pcsx2_process_handle: process_handle,
             },
-            auto_nan_offsets: offsets,
         };
     }
 
     pub fn read_autos(&self) -> Vec<Automobile> {
-        let array_offset: usize = GameData::automobiles_start(self.auto_nan_offsets[0]);
         let member = DataMember::<[Automobile; 6]>::new_offset(
             self.ps2.pcsx2_process_handle,
-            vec![array_offset],
+            vec![self.automobiles_start_address()],
         );
         return member.read().unwrap().to_vec();
     }
 
     pub fn read_entries(&self) -> Vec<Entry> {
-        let array_offset: usize = GameData::entries_start(self.auto_nan_offsets[0]);
-        let member =
-            DataMember::<[Entry; 6]>::new_offset(self.ps2.pcsx2_process_handle, vec![array_offset]);
+        let member = DataMember::<[Entry; 6]>::new_offset(
+            self.ps2.pcsx2_process_handle,
+            vec![self.entries_start_address()],
+        );
         return member.read().unwrap().to_vec();
     }
 }
