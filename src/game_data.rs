@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    ps2_types::{Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String},
+    ps2_types::{Ps2InProcess, Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String},
     scan_memory,
 };
 use derivative::Derivative;
@@ -136,7 +136,6 @@ pub enum TuningTable {
 }
 
 type TimeMs = i32;
-type LapNumber = i16;
 
 pub struct GameData<M: Ps2Memory> {
     pub ps2: M,
@@ -148,8 +147,25 @@ pub struct GameData<M: Ps2Memory> {
 // offset from EE main memory base to start of NaN block for cars[1]
 const FIRST_NAN_OFFSET_FROM_EE_BASE: usize = 0x01C0EEA4;
 
+impl GameData<Ps2InProcess> {
+    pub fn in_same_process() -> Self {
+        return GameData {
+            ps2: Ps2InProcess,
+            car_checkpoints: [
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+            ],
+            race_time: 0,
+        };
+    }
+}
+
 impl GameData<Ps2SeparateProcess> {
-    pub fn connect(process_handle: ProcessHandle) -> GameData<Ps2SeparateProcess> {
+    pub fn connect(process_handle: ProcessHandle) -> Self {
         println!("Finding cars");
         let mut cars_sig = Vec::new();
         cars_sig.extend_from_slice(&[0xFF; 64]); // these are the NaNs

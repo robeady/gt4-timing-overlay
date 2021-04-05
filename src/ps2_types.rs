@@ -64,15 +64,19 @@ pub struct Ps2SeparateProcess {
 
 impl Ps2Memory for Ps2SeparateProcess {
     fn read<T: Copy>(&self, address: u32) -> T {
-        let mapped_addr = match address {
-            0x00000000..=0x01FFFFFF => self.ee_base_address as u32 + address,
-            0x20000000..=0x21FFFFFF => self.ee_base_address as u32 + address - 0x20000000,
-            0x30000000..=0x31FFFFFF => self.ee_base_address as u32 + address - 0x30000000,
-            _ => panic!("unsupported PS2 pointer address {:x} a", address),
-        };
+        let mapped_addr = remap_ps2_address(address, self.ee_base_address as u32);
         DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize])
             .read()
             .unwrap()
+    }
+}
+
+fn remap_ps2_address(address: u32, ee_base_address: u32) -> u32 {
+    match address {
+        0x00000000..=0x01FFFFFF => ee_base_address + address,
+        0x20000000..=0x21FFFFFF => ee_base_address + address - 0x20000000,
+        0x30000000..=0x31FFFFFF => ee_base_address + address - 0x30000000,
+        _ => panic!("unsupported PS2 pointer address {:x} a", address),
     }
 }
 
@@ -82,7 +86,8 @@ impl Ps2Memory for Ps2InProcess {
     fn read<T: Copy>(&self, address: u32) -> T {
         // TODO: check whether any memory mapping is required in-process or whether we can read the address directly
         // I don't know enough about how the emulator works...
-        LocalMember::new_offset(vec![address as usize])
+        let mapped_addr = remap_ps2_address(address, 0x20000000);
+        LocalMember::new_offset(vec![mapped_addr as usize])
             .read()
             .unwrap()
     }

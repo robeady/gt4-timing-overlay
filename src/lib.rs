@@ -1,19 +1,23 @@
-// use hudhook::*;
-use hudhook::imgui::{im_str, Condition, Window};
+use game_data::GameData;
 use hudhook::{apply_hook, cleanup_hooks, RenderContext, RenderLoop};
+use ps2_types::Ps2Memory;
 use std::{ptr::null_mut, thread};
 use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 
-pub struct MyRenderLoop;
+mod game_data;
+mod processes;
+mod ps2_types;
+mod scan_memory;
+mod ui;
+mod window;
 
-impl RenderLoop for MyRenderLoop {
+pub struct Gt4TimingRenderLoop<M: Ps2Memory> {
+    game_data: GameData<M>,
+}
+
+impl<M: Ps2Memory> RenderLoop for Gt4TimingRenderLoop<M> {
     fn render(&mut self, ctx: RenderContext) {
-        Window::new(im_str!("My first render loop"))
-            .size([320., 200.], Condition::FirstUseEver)
-            .position([0., 0.], Condition::FirstUseEver)
-            .build(ctx.frame, || {
-                ctx.frame.text(im_str!("Hello, hello!"));
-            });
+        ui::render_ui(ctx.frame, [320., 300.], &mut self.game_data, true)
     }
 
     fn is_visible(&self) -> bool {
@@ -38,7 +42,7 @@ pub extern "stdcall" fn DllMain(
         DLL_PROCESS_ATTACH => {
             thread::spawn(|| {
                 println!("Started thread, enabling hook...");
-                match apply_hook(Box::new(MyRenderLoop)) {
+                match apply_hook(Box::new(Gt4TimingRenderLoop { game_data: GameData::in_same_process() })) {
                     Ok(_) => println!("Hook enabled"),
                     Err(e) => println!("Hook errored: {:?}", e),
                 }

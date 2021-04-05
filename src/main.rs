@@ -1,5 +1,7 @@
 use game_data::GameData;
 use process_memory::{Architecture, Pid, ProcessHandleExt, TryIntoProcessHandle};
+use ui::render_ui;
+use window::App;
 
 mod game_data;
 mod processes;
@@ -19,6 +21,12 @@ fn main() {
         .unwrap()
         .set_arch(Architecture::Arch32Bit);
 
-    let gd = GameData::connect(handle);
-    ui::render_window(gd, || {});
+    let mut game_data = GameData::connect(handle);
+
+    let window_size = [400.0, 300.0];
+    let app = App::init("GT4 timing", window_size);
+    app.main_loop(
+        move |ui| render_ui(ui, window_size, &mut game_data, false),
+        || {},
+    );
 }
