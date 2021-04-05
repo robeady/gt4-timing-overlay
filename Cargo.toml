@@ -19,6 +19,8 @@ glium = "0.29"
 imgui-winit-support = "0.7.0"
 ordered-float = "2.1.1"
 hudhook = "0.1.6"
+log = "0.4.14"
+simplelog = "0.10.0"
 
 [lib]
 name = "timing_lib"
