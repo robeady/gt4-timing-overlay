@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    ps2_types::{Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2String},
+    ps2_types::{Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String},
     scan_memory,
 };
 use derivative::Derivative;
@@ -138,8 +138,8 @@ pub enum TuningTable {
 type TimeMs = i32;
 type LapNumber = i16;
 
-pub struct GameData {
-    pub ps2: Ps2Memory,
+pub struct GameData<M: Ps2Memory> {
+    pub ps2: M,
     /// for each car, a map from distance through the race to time at which this distance was reached
     pub car_checkpoints: [BTreeMap<OrderedFloat<f32>, TimeMs>; NUM_CARS],
     pub race_time: TimeMs,
@@ -148,8 +148,8 @@ pub struct GameData {
 // offset from EE main memory base to start of NaN block for cars[1]
 const FIRST_NAN_OFFSET_FROM_EE_BASE: usize = 0x01C0EEA4;
 
-impl GameData {
-    pub fn connect(process_handle: ProcessHandle) -> GameData {
+impl GameData<Ps2SeparateProcess> {
+    pub fn connect(process_handle: ProcessHandle) -> GameData<Ps2SeparateProcess> {
         println!("Finding cars");
         let mut cars_sig = Vec::new();
         cars_sig.extend_from_slice(&[0xFF; 64]); // these are the NaNs
@@ -164,7 +164,7 @@ impl GameData {
                 offsets
             );
             return GameData {
-                ps2: Ps2Memory {
+                ps2: Ps2SeparateProcess {
                     ee_base_address: 0,
                     pcsx2_process_handle: process_handle,
                 },
@@ -183,7 +183,7 @@ impl GameData {
         let ee_base_address = offsets[0] - FIRST_NAN_OFFSET_FROM_EE_BASE;
 
         return GameData {
-            ps2: Ps2Memory {
+            ps2: Ps2SeparateProcess {
                 ee_base_address,
                 pcsx2_process_handle: process_handle,
             },
@@ -198,7 +198,9 @@ impl GameData {
             race_time: 0,
         };
     }
+}
 
+impl<M: Ps2Memory> GameData<M> {
     pub fn sample_car_checkpoints(&mut self) {
         let autos = self.read_cars();
         let new_race_time = self.read_race_time();
@@ -256,37 +258,27 @@ impl GameData {
     }
 
     pub fn read_cars(&self) -> Vec<Automobile> {
-        let cars_start_address = self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE
+        let cars_start_address = FIRST_NAN_OFFSET_FROM_EE_BASE
         - BEFORE_NANS  // go to start of Automobile struct
         - size_of::<Automobile>(); // that was entry 1, go to entry 0
-        let member = DataMember::<[Automobile; 6]>::new_offset(
-            self.ps2.pcsx2_process_handle,
-            vec![cars_start_address],
-        );
-        member.read().unwrap().to_vec()
+        Ps2Ptr::<[Automobile; 6]>::new(cars_start_address as u32)
+            .get(&self.ps2)
+            .to_vec()
     }
 
     pub fn read_entries(&self) -> Vec<Entry> {
-        let entries_start_address =
-            self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
-        let member = DataMember::<[Entry; 6]>::new_offset(
-            self.ps2.pcsx2_process_handle,
-            vec![entries_start_address],
-        );
-        member.read().unwrap().to_vec()
+        let entries_start_address = FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
+        Ps2Ptr::<[Entry; 6]>::new(entries_start_address as u32)
+            .get(&self.ps2)
+            .to_vec()
     }
 
     pub fn read_race_time(&self) -> TimeMs {
-        let race_time_address = self.ps2.ee_base_address + FIRST_NAN_OFFSET_FROM_EE_BASE - 0xA4A0;
-        let member = DataMember::<TimeMs>::new_offset(
-            self.ps2.pcsx2_process_handle,
-            vec![race_time_address],
-        );
-        member.read().unwrap()
+        let race_time_address = FIRST_NAN_OFFSET_FROM_EE_BASE - 0xA4A0;
+        Ps2Ptr::new(race_time_address as u32).get(&self.ps2)
     }
 
     pub fn read_track_length(&self) -> f32 {
-        let track_length_pointer_chain = Ps2PtrChain::<f32>::new(&[0x01C19694, 20]);
-        track_length_pointer_chain.get(&self.ps2)
+        Ps2PtrChain::new(&[0x01C19694, 20]).get(&self.ps2)
     }
 }

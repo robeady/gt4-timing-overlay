@@ -1,18 +1,15 @@
 use imgui::*;
 
-use crate::{game_data::GameData, window::App};
+use crate::{game_data::GameData, ps2_types::Ps2Memory, window::App};
 
-pub fn render_window(mut game_data: GameData, before_exit: impl Fn() + 'static) {
+pub fn render_window<M: Ps2Memory + 'static>(
+    mut game_data: GameData<M>,
+    before_exit: impl Fn() + 'static,
+) {
     let window_size = [400.0, 300.0];
     let app = App::init("GT4 timing", window_size);
     app.main_loop(
         move |ui| {
-            // HACK error condition
-            if game_data.ps2.ee_base_address == 0 {
-                Window::new(im_str!("GT4 Timing is off")).build(ui, || {});
-                return;
-            }
-
             let cars = game_data.read_cars();
             let entries = game_data.read_entries();
 

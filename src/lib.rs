@@ -1,7 +1,7 @@
 // use hudhook::*;
 use hudhook::imgui::{im_str, Condition, Window};
 use hudhook::{apply_hook, cleanup_hooks, RenderContext, RenderLoop};
-use std::{ptr::null_mut, thread, time::Duration};
+use std::{ptr::null_mut, thread};
 use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 
 pub struct MyRenderLoop;

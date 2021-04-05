@@ -1,12 +1,7 @@
 use std::marker::PhantomData;
 
-use process_memory::Memory;
 use process_memory::{DataMember, ProcessHandle};
-
-pub struct Ps2Memory {
-    pub pcsx2_process_handle: ProcessHandle,
-    pub ee_base_address: usize,
-}
+use process_memory::{LocalMember, Memory};
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
@@ -17,17 +12,8 @@ impl<T: Copy> Ps2Ptr<T> {
         Self(offset, PhantomData)
     }
 
-    pub fn get(&self, ps2_memory: &Ps2Memory) -> T {
-        let ptr = self.0 as usize;
-        let addr = match ptr {
-            0x00000000..=0x01FFFFFF => ps2_memory.ee_base_address + ptr,
-            0x20000000..=0x21FFFFFF => ps2_memory.ee_base_address + ptr - 0x20000000,
-            0x30000000..=0x31FFFFFF => ps2_memory.ee_base_address + ptr - 0x30000000,
-            _ => panic!("unsupported PS2 pointer address {}", ptr),
-        };
-        return DataMember::new_offset(ps2_memory.pcsx2_process_handle, vec![addr])
-            .read()
-            .unwrap();
+    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> T {
+        ps2_memory.read(self.0)
     }
 }
 
@@ -41,31 +27,13 @@ impl<'a, T: Copy> Ps2PtrChain<'a, T> {
         Self(offsets, PhantomData)
     }
 
-    pub fn get(&self, ps2_memory: &Ps2Memory) -> T {
+    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> T {
         let mut ptr = 0u32;
         let (&last_offset, offsets) = self.0.split_last().unwrap();
         for &offset in offsets {
-            let addr = ptr + offset;
-            let mapped_addr = match addr {
-                0x00000000..=0x01FFFFFF => ps2_memory.ee_base_address as u32 + addr,
-                0x20000000..=0x21FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x20000000,
-                0x30000000..=0x31FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x30000000,
-                _ => panic!("unsupported PS2 pointer address {:x} a", addr),
-            } as usize;
-            ptr = DataMember::<u32>::new_offset(ps2_memory.pcsx2_process_handle, vec![mapped_addr])
-                .read()
-                .unwrap();
+            ptr = ps2_memory.read::<u32>(ptr + offset);
         }
-        let addr = ptr + last_offset;
-        let mapped_addr = match addr {
-            0x00000000..=0x01FFFFFF => ps2_memory.ee_base_address as u32 + addr,
-            0x20000000..=0x21FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x20000000,
-            0x30000000..=0x31FFFFFF => ps2_memory.ee_base_address as u32 + addr - 0x30000000,
-            _ => panic!("unsupported PS2 pointer address {:x} a", addr),
-        } as usize;
-        DataMember::<T>::new_offset(ps2_memory.pcsx2_process_handle, vec![mapped_addr])
-            .read()
-            .unwrap()
+        ps2_memory.read(ptr + last_offset)
     }
 }
 
@@ -82,5 +50,40 @@ impl<const N: usize> From<Ps2String<N>> for String {
             .take_while(|&c| *c != 0)
             .map(|&c| c as char)
             .collect();
+    }
+}
+
+pub trait Ps2Memory {
+    fn read<T: Copy>(&self, address: u32) -> T;
+}
+
+pub struct Ps2SeparateProcess {
+    pub pcsx2_process_handle: ProcessHandle,
+    pub ee_base_address: usize,
+}
+
+impl Ps2Memory for Ps2SeparateProcess {
+    fn read<T: Copy>(&self, address: u32) -> T {
+        let mapped_addr = match address {
+            0x00000000..=0x01FFFFFF => self.ee_base_address as u32 + address,
+            0x20000000..=0x21FFFFFF => self.ee_base_address as u32 + address - 0x20000000,
+            0x30000000..=0x31FFFFFF => self.ee_base_address as u32 + address - 0x30000000,
+            _ => panic!("unsupported PS2 pointer address {:x} a", address),
+        };
+        DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize])
+            .read()
+            .unwrap()
+    }
+}
+
+pub struct Ps2InProcess;
+
+impl Ps2Memory for Ps2InProcess {
+    fn read<T: Copy>(&self, address: u32) -> T {
+        // TODO: check whether any memory mapping is required in-process or whether we can read the address directly
+        // I don't know enough about how the emulator works...
+        LocalMember::new_offset(vec![address as usize])
+            .read()
+            .unwrap()
     }
 }
