@@ -18,3 +18,13 @@ imgui-glium-renderer = "0.4.0"
 glium = "0.27"
 imgui-winit-support = "0.4.0"
 ordered-float = "2.1.1"
+hudhook = "0.1.6"
+log = "0.4.14"
+env_logger = "0.8.3"
+
+[lib]
+name = "timing_lib"
+crate-type = ["cdylib"]
+
+[patch.crates-io]
+hudhook = { path = "../hudhook" }

@@ -158,11 +158,26 @@ impl GameData {
         println!("Found cars at {:?}", offsets);
 
         if offsets.len() != 5 {
-            panic!(
+            println!(
                 "found {} NaN blocks at {:?}, expected 5",
                 offsets.len(),
                 offsets
-            )
+            );
+            return GameData {
+                ps2: Ps2Memory {
+                    ee_base_address: 0,
+                    pcsx2_process_handle: process_handle,
+                },
+                car_checkpoints: [
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                ],
+                race_time: 0,
+            };
         }
 
         let ee_base_address = offsets[0] - FIRST_NAN_OFFSET_FROM_EE_BASE;

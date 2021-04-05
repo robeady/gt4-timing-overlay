@@ -65,7 +65,11 @@ impl App {
         }
     }
 
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
+    pub fn main_loop<F: FnMut(&mut Ui) + 'static>(
+        self,
+        mut run_ui: F,
+        before_exit: impl Fn() + 'static,
+    ) {
         let App {
             event_loop,
             display,
@@ -87,12 +91,7 @@ impl App {
             }
             Event::RedrawRequested(_) => {
                 let mut ui = imgui.frame();
-                let mut run = true;
-                run_ui(&mut run, &mut ui);
-                if !run {
-                    *control_flow = ControlFlow::Exit;
-                }
-
+                run_ui(&mut ui);
                 let gl_window = display.gl_window();
                 let mut target = display.draw();
                 target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
@@ -106,7 +105,10 @@ impl App {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => *control_flow = ControlFlow::Exit,
+            } => {
+                *control_flow = ControlFlow::Exit;
+                before_exit();
+            }
             event => {
                 let gl_window = display.gl_window();
                 platform.handle_event(imgui.io_mut(), gl_window.window(), &event);
