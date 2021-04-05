@@ -2,7 +2,10 @@ use game_data::GameData;
 use hudhook::{apply_hook, cleanup_hooks, RenderContext, RenderLoop};
 use ps2_types::Ps2Memory;
 use std::{ptr::null_mut, thread};
-use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
+use winapi::um::{
+    consoleapi::AllocConsole,
+    winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
+};
 
 mod game_data;
 mod processes;
@@ -31,7 +34,6 @@ impl<M: Ps2Memory> RenderLoop for Gt4TimingRenderLoop<M> {
 // hudhook!(Box::new(MyRenderLoop));
 // // expand it myself because of undeclared dependencies to do with logging...
 
-/// Entry point created by the `hudhook` library.
 #[no_mangle]
 pub extern "stdcall" fn DllMain(
     _: winapi::shared::minwindef::HINSTANCE,
@@ -41,14 +43,20 @@ pub extern "stdcall" fn DllMain(
     match reason {
         DLL_PROCESS_ATTACH => {
             thread::spawn(|| {
+                unsafe {
+                    AllocConsole();
+                }
                 println!("Started thread, enabling hook...");
-                match apply_hook(Box::new(Gt4TimingRenderLoop { game_data: GameData::in_same_process() })) {
+                match apply_hook(Box::new(Gt4TimingRenderLoop {
+                    game_data: GameData::in_same_process(),
+                })) {
                     Ok(_) => println!("Hook enabled"),
                     Err(e) => println!("Hook errored: {:?}", e),
                 }
             });
         }
-        DLL_PROCESS_DETACH if lp_reserved == null_mut() /* NULL => FreeLibrary called or DLL load failed, rather than process termination */ => {
+        DLL_PROCESS_DETACH if lp_reserved == null_mut() => {
+            // lp_reserved == NULL => FreeLibrary called or DLL load failed, rather than process termination
             cleanup_hooks().unwrap_or_else(|e| println!("{}", e));
         }
         _ => {}
