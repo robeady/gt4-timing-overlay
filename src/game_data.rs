@@ -1,19 +1,13 @@
-use std::{
-    cmp::{min, Ordering},
-    collections::BTreeMap,
-    f32::INFINITY,
-    mem::size_of,
+use crate::ps2_types::{
+    Ps2InProcess, Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String,
 };
-
-use crate::{
-    ps2_types::{Ps2InProcess, Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String},
-    scan_memory,
-};
+use anyhow::Result;
 use derivative::Derivative;
 use ordered_float::OrderedFloat;
-use process_memory::{DataMember, Memory, ProcessHandle};
+use process_memory::ProcessHandle;
+use std::{collections::BTreeMap, mem::size_of};
 
-const NUM_CARS: usize = 6;
+const MAX_CARS: usize = 6;
 
 const BEFORE_NANS: usize = 140;
 
@@ -140,7 +134,7 @@ type TimeMs = i32;
 pub struct GameData<M: Ps2Memory> {
     pub ps2: M,
     /// for each car, a map from distance through the race to time at which this distance was reached
-    pub car_checkpoints: [BTreeMap<OrderedFloat<f32>, TimeMs>; NUM_CARS],
+    pub car_checkpoints: [BTreeMap<OrderedFloat<f32>, TimeMs>; MAX_CARS],
     pub race_time: TimeMs,
 }
 
@@ -183,36 +177,62 @@ impl GameData<Ps2SeparateProcess> {
     }
 }
 
+pub struct RaceState {
+    pub track_length: f32,
+    pub cars: Vec<Automobile>,
+    pub entries: Vec<Entry>,
+    pub gaps_to_leader: Vec<Option<f32>>,
+}
+
 impl<M: Ps2Memory> GameData<M> {
-    pub fn sample_car_checkpoints(&mut self) {
-        let autos = self.read_cars();
-        let new_race_time = self.read_race_time();
-        if new_race_time < self.race_time {
-            for i in 0..NUM_CARS {
-                self.car_checkpoints[i].clear()
+    pub fn sample_race(&mut self) -> Result<RaceState> {
+        // TODO: handle less than 6 cars e.g. special events
+        // TODO: handle practice mode. not sure what goes wrong.
+        let cars = CARS.get(&self.ps2)?.to_vec();
+        let entries = ENTRIES.get(&self.ps2)?.to_vec();
+        let track_length = TRACK_LENGTH.get(&self.ps2)?;
+        {
+            let new_race_time = RACE_TIME.get(&self.ps2)?;
+            if new_race_time < self.race_time {
+                for i in 0..MAX_CARS {
+                    self.car_checkpoints[i].clear()
+                }
             }
+            self.race_time = new_race_time;
         }
-        self.race_time = new_race_time;
-        let track_length = self.read_track_length();
-        for i in 0..NUM_CARS {
-            let progress = autos[i].progress(track_length);
+        for i in 0..MAX_CARS {
+            let progress = cars[i].progress(track_length);
             if progress >= 1f32.into() {
                 self.car_checkpoints[i].insert(progress, self.race_time);
             }
         }
+
+        let gaps_to_leader = (0..MAX_CARS)
+            .map(|i| self.calculate_gap_to_leader_ms(i, &cars, track_length, self.race_time as f32))
+            .collect();
+
+        Ok(RaceState {
+            track_length,
+            cars,
+            entries,
+            gaps_to_leader,
+        })
     }
 
-    pub fn gap_to_leader_ms(&self, car: usize) -> Option<f32> {
-        let cars = self.read_cars();
-        let current_time = self.read_race_time() as f32;
-        let track_length = self.read_track_length();
+    fn calculate_gap_to_leader_ms(
+        &self,
+        car: usize,
+        cars: &[Automobile],
+        track_length: f32,
+        race_time: f32,
+    ) -> Option<f32> {
         let progress_to_find = cars[car].progress(track_length);
         if progress_to_find < 1f32.into() {
             // cars still on the grid
             return None;
         }
         let mut leader_time: Option<f32> = None;
-        for i in 0..NUM_CARS {
+        for i in 0..MAX_CARS {
             if i == car {
                 continue;
             }
@@ -237,31 +257,22 @@ impl<M: Ps2Memory> GameData<M> {
                 }
             }
         }
-        return leader_time.map(|t| current_time - t);
-    }
-
-    pub fn read_cars(&self) -> Vec<Automobile> {
-        let cars_start_address = FIRST_NAN_OFFSET_FROM_EE_BASE
-        - BEFORE_NANS  // go to start of Automobile struct
-        - size_of::<Automobile>(); // that was entry 1, go to entry 0
-        Ps2Ptr::<[Automobile; 6]>::new(cars_start_address as u32)
-            .get(&self.ps2)
-            .to_vec()
-    }
-
-    pub fn read_entries(&self) -> Vec<Entry> {
-        let entries_start_address = FIRST_NAN_OFFSET_FROM_EE_BASE - 0x2E0A4;
-        Ps2Ptr::<[Entry; 6]>::new(entries_start_address as u32)
-            .get(&self.ps2)
-            .to_vec()
-    }
-
-    pub fn read_race_time(&self) -> TimeMs {
-        let race_time_address = FIRST_NAN_OFFSET_FROM_EE_BASE - 0xA4A0;
-        Ps2Ptr::new(race_time_address as u32).get(&self.ps2)
-    }
-
-    pub fn read_track_length(&self) -> f32 {
-        Ps2PtrChain::new(&[0x01BF52FC, 404, 20]).get(&self.ps2)
+        return leader_time.map(|t| race_time - t);
     }
 }
+
+const CARS: Ps2Ptr<[Automobile; MAX_CARS]> = Ps2Ptr::new(
+    (
+        FIRST_NAN_OFFSET_FROM_EE_BASE
+    - BEFORE_NANS  // go to start of Automobile struct
+    - size_of::<Automobile>()
+        //  that was entry 1, go to entry 0
+    ) as u32,
+);
+
+const ENTRIES: Ps2Ptr<[Entry; MAX_CARS]> =
+    Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0x2E0A4);
+
+const RACE_TIME: Ps2Ptr<TimeMs> = Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0xA4A0);
+
+const TRACK_LENGTH: Ps2PtrChain<f32> = Ps2PtrChain::new(&[0x01BF52FC, 404, 20]);

@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use anyhow::{bail, Result};
 use process_memory::{DataMember, ProcessHandle};
 use process_memory::{LocalMember, Memory};
 
@@ -9,36 +10,39 @@ const EE_BASE_ADDRESS: u32 = 0x20000000;
 #[derive(Copy, Clone, Debug)]
 pub struct Ps2Ptr<T>(u32, PhantomData<T>);
 
-impl<T: Copy> Ps2Ptr<T> {
-    pub fn new(offset: u32) -> Self {
+impl<T> Ps2Ptr<T> {
+    pub const fn new(offset: u32) -> Self {
         Self(offset, PhantomData)
     }
+}
 
-    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> T {
+impl<T: Copy> Ps2Ptr<T> {
+    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> Result<T> {
         ps2_memory.read(self.0)
     }
 }
 
 pub struct Ps2PtrChain<'a, T>(&'a [u32], PhantomData<T>);
 
-impl<'a, T: Copy> Ps2PtrChain<'a, T> {
-    pub fn new(offsets: &'a [u32]) -> Self {
-        if offsets.len() == 0 {
-            panic!("no offsets provided when creating pointer chain")
-        }
+impl<'a, T> Ps2PtrChain<'a, T> {
+    pub const fn new(offsets: &'a [u32]) -> Self {
         Self(offsets, PhantomData)
     }
+}
 
-    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> T {
+impl<'a, T: Copy> Ps2PtrChain<'a, T> {
+    pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> Result<T> {
         let mut ptr = 0u32;
-        let (&last_offset, offsets) = self.0.split_last().unwrap();
+        let (&last_offset, offsets) = self.0.split_last().expect("pointer chain has no offsets");
         for (step, &offset) in offsets.iter().enumerate() {
             let addr = ptr + offset;
-            ptr = ps2_memory.read::<u32>(addr);
+            ptr = ps2_memory.read::<u32>(addr)?;
             if ptr == 0 {
-                panic!(
+                bail!(
                     "null pointer found at {:x} in chain {:?}[{}]",
-                    addr, self.0, step
+                    addr,
+                    self.0,
+                    step
                 );
             }
         }
@@ -63,7 +67,7 @@ impl<const N: usize> From<Ps2String<N>> for String {
 }
 
 pub trait Ps2Memory {
-    fn read<T: Copy>(&self, address: u32) -> T;
+    fn read<T: Copy>(&self, address: u32) -> Result<T>;
 }
 
 pub struct Ps2SeparateProcess {
@@ -71,11 +75,9 @@ pub struct Ps2SeparateProcess {
 }
 
 impl Ps2Memory for Ps2SeparateProcess {
-    fn read<T: Copy>(&self, address: u32) -> T {
+    fn read<T: Copy>(&self, address: u32) -> Result<T> {
         let mapped_addr = remap_ps2_address(address);
-        DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize])
-            .read()
-            .unwrap()
+        Ok(DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize]).read()?)
     }
 }
 
@@ -91,10 +93,8 @@ fn remap_ps2_address(address: u32) -> u32 {
 pub struct Ps2InProcess;
 
 impl Ps2Memory for Ps2InProcess {
-    fn read<T: Copy>(&self, address: u32) -> T {
+    fn read<T: Copy>(&self, address: u32) -> Result<T> {
         let mapped_addr = remap_ps2_address(address);
-        LocalMember::new_offset(vec![mapped_addr as usize])
-            .read()
-            .unwrap()
+        Ok(LocalMember::new_offset(vec![mapped_addr as usize]).read()?)
     }
 }
