@@ -38,12 +38,7 @@ impl<'a, T: Copy> Ps2PtrChain<'a, T> {
             let addr = ptr + offset;
             ptr = ps2_memory.read::<u32>(addr)?;
             if ptr == 0 {
-                bail!(
-                    "null pointer found at {:x} in chain {:?}[{}]",
-                    addr,
-                    self.0,
-                    step
-                );
+                bail!("null pointer found at {:x} in chain {:?}[{}]", addr, self.0, step);
             }
         }
         ps2_memory.read(ptr + last_offset)
@@ -57,12 +52,7 @@ pub struct Ps2String<const N: usize>([u8; N]);
 
 impl<const N: usize> From<Ps2String<N>> for String {
     fn from(s: Ps2String<N>) -> Self {
-        return s
-            .0
-            .iter()
-            .take_while(|&c| *c != 0)
-            .map(|&c| c as char)
-            .collect();
+        return s.0.iter().take_while(|&c| *c != 0).map(|&c| c as char).collect();
     }
 }
 

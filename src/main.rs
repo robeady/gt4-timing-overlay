@@ -30,17 +30,11 @@ fn main() {
     .unwrap();
 
     let pid = processes::get_pcsx2_process_id();
-    let handle = (pid as Pid)
-        .try_into_process_handle()
-        .unwrap()
-        .set_arch(Architecture::Arch32Bit);
+    let handle = (pid as Pid).try_into_process_handle().unwrap().set_arch(Architecture::Arch32Bit);
 
     let mut game_data = GameData::connect(handle);
 
     let window_size = [400.0, 300.0];
     let app = App::init("GT4 timing", window_size);
-    app.main_loop(
-        move |ui| render_ui(ui, window_size, &mut game_data, false),
-        || {},
-    );
+    app.main_loop(move |ui| render_ui(ui, window_size, &mut game_data, false), || {});
 }

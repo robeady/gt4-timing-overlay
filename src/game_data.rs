@@ -161,9 +161,7 @@ impl GameData<Ps2InProcess> {
 impl GameData<Ps2SeparateProcess> {
     pub fn connect(process_handle: ProcessHandle) -> Self {
         return GameData {
-            ps2: Ps2SeparateProcess {
-                pcsx2_process_handle: process_handle,
-            },
+            ps2: Ps2SeparateProcess { pcsx2_process_handle: process_handle },
             car_checkpoints: [
                 BTreeMap::new(),
                 BTreeMap::new(),
@@ -211,12 +209,7 @@ impl<M: Ps2Memory> GameData<M> {
             .map(|i| self.calculate_gap_to_leader_ms(i, &cars, track_length, self.race_time as f32))
             .collect();
 
-        Ok(RaceState {
-            track_length,
-            cars,
-            entries,
-            gaps_to_leader,
-        })
+        Ok(RaceState { track_length, cars, entries, gaps_to_leader })
     }
 
     fn calculate_gap_to_leader_ms(
@@ -237,9 +230,7 @@ impl<M: Ps2Memory> GameData<M> {
                 continue;
             }
             let min_greater = self.car_checkpoints[i].range(progress_to_find..).next();
-            let max_less = self.car_checkpoints[i]
-                .range(..progress_to_find)
-                .next_back();
+            let max_less = self.car_checkpoints[i].range(..progress_to_find).next_back();
 
             if let (Some(min_greater), Some(max_less)) = (min_greater, max_less) {
                 // linearly interpolate

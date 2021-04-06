@@ -23,11 +23,8 @@ pub fn render_ui<M: Ps2Memory>(
                 ui.text(im_str!("track is {:.3}km long", r.track_length / 1000.0));
                 ui.separator();
                 for i in 0..(r.cars.len()) {
-                    let mass = r.cars[i]
-                        .car_spec
-                        .get(&game_data.ps2)
-                        .map(|c| c.mass)
-                        .unwrap_or(f32::NAN);
+                    let mass =
+                        r.cars[i].car_spec.get(&game_data.ps2).map(|c| c.mass).unwrap_or(f32::NAN);
                     let name: String = r.entries[i].car_name_short.into();
                     let gap_to_leader = r.gaps_to_leader[i].unwrap_or(f32::NAN) / 1000f32;
                     ui.text(format!(
@@ -37,10 +34,7 @@ pub fn render_ui<M: Ps2Memory>(
                 }
                 ui.separator();
                 let mouse_pos = ui.io().mouse_pos;
-                ui.text(format!(
-                    "Mouse Position: ({:.1},{:.1})",
-                    mouse_pos[0], mouse_pos[1]
-                ));
+                ui.text(format!("Mouse Position: ({:.1},{:.1})", mouse_pos[0], mouse_pos[1]));
             }
         });
 

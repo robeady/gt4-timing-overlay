@@ -25,10 +25,7 @@ impl App {
         let context = glutin::ContextBuilder::new().with_vsync(true);
         let builder = WindowBuilder::new()
             .with_title(title.to_owned())
-            .with_inner_size(glutin::dpi::LogicalSize::new(
-                window_size[0],
-                window_size[1],
-            ));
+            .with_inner_size(glutin::dpi::LogicalSize::new(window_size[0], window_size[1]));
         let display =
             Display::new(builder, context, &event_loop).expect("Failed to initialize display");
 
@@ -45,24 +42,14 @@ impl App {
         let hidpi_factor = platform.hidpi_factor();
         let font_size = (13.0 * hidpi_factor) as f32;
         imgui.fonts().add_font(&[FontSource::DefaultFontData {
-            config: Some(FontConfig {
-                size_pixels: font_size,
-                ..FontConfig::default()
-            }),
+            config: Some(FontConfig { size_pixels: font_size, ..FontConfig::default() }),
         }]);
 
         imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
         let renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize renderer");
 
-        App {
-            event_loop,
-            display,
-            imgui,
-            platform,
-            renderer,
-            font_size,
-        }
+        App { event_loop, display, imgui, platform, renderer, font_size }
     }
 
     pub fn main_loop<F: FnMut(&mut Ui) + 'static>(
@@ -70,14 +57,7 @@ impl App {
         mut run_ui: F,
         before_exit: impl Fn() + 'static,
     ) {
-        let App {
-            event_loop,
-            display,
-            mut imgui,
-            mut platform,
-            mut renderer,
-            ..
-        } = self;
+        let App { event_loop, display, mut imgui, mut platform, mut renderer, .. } = self;
         let mut last_frame = Instant::now();
 
         event_loop.run(move |event, _, control_flow| match event {
@@ -101,15 +81,10 @@ impl App {
                 target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
                 platform.prepare_render(&ui, gl_window.window());
                 let draw_data = ui.render();
-                renderer
-                    .render(&mut target, draw_data)
-                    .expect("Rendering failed");
+                renderer.render(&mut target, draw_data).expect("Rendering failed");
                 target.finish().expect("Failed to swap buffers");
             }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 *control_flow = ControlFlow::Exit;
                 before_exit();
             }
