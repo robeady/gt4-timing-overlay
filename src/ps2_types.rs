@@ -22,7 +22,7 @@ pub struct Ps2PtrChain<'a, T>(&'a [u32], PhantomData<T>);
 impl<'a, T: Copy> Ps2PtrChain<'a, T> {
     pub fn new(offsets: &'a [u32]) -> Self {
         if offsets.len() == 0 {
-            panic!("0 offsets provided when creating pointer chain")
+            panic!("no offsets provided when creating pointer chain")
         }
         Self(offsets, PhantomData)
     }
@@ -30,8 +30,15 @@ impl<'a, T: Copy> Ps2PtrChain<'a, T> {
     pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> T {
         let mut ptr = 0u32;
         let (&last_offset, offsets) = self.0.split_last().unwrap();
-        for &offset in offsets {
-            ptr = ps2_memory.read::<u32>(ptr + offset);
+        for (step, &offset) in offsets.iter().enumerate() {
+            let addr = ptr + offset;
+            ptr = ps2_memory.read::<u32>(addr);
+            if ptr == 0 {
+                panic!(
+                    "null pointer found at {:x} in chain {:?}[{}]",
+                    addr, self.0, step
+                );
+            }
         }
         ps2_memory.read(ptr + last_offset)
     }
@@ -65,6 +72,7 @@ pub struct Ps2SeparateProcess {
 impl Ps2Memory for Ps2SeparateProcess {
     fn read<T: Copy>(&self, address: u32) -> T {
         let mapped_addr = remap_ps2_address(address, self.ee_base_address as u32);
+        log::debug!("mapped {:x} to {:x}", address, mapped_addr);
         DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize])
             .read()
             .unwrap()
@@ -76,7 +84,7 @@ fn remap_ps2_address(address: u32, ee_base_address: u32) -> u32 {
         0x00000000..=0x01FFFFFF => ee_base_address + address,
         0x20000000..=0x21FFFFFF => ee_base_address + address - 0x20000000,
         0x30000000..=0x31FFFFFF => ee_base_address + address - 0x30000000,
-        _ => panic!("unsupported PS2 pointer address {:x} a", address),
+        _ => panic!("unsupported PS2 pointer address {:x}", address),
     }
 }
 

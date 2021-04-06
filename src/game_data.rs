@@ -295,6 +295,6 @@ impl<M: Ps2Memory> GameData<M> {
     }
 
     pub fn read_track_length(&self) -> f32 {
-        Ps2PtrChain::new(&[0x01C19694, 20]).get(&self.ps2)
+        Ps2PtrChain::new(&[0x01BF52FC, 404, 20]).get(&self.ps2)
     }
 }
