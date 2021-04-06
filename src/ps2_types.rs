@@ -3,6 +3,8 @@ use std::marker::PhantomData;
 use process_memory::{DataMember, ProcessHandle};
 use process_memory::{LocalMember, Memory};
 
+const EE_BASE_ADDRESS: u32 = 0x20000000;
+
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct Ps2Ptr<T>(u32, PhantomData<T>);
@@ -66,24 +68,22 @@ pub trait Ps2Memory {
 
 pub struct Ps2SeparateProcess {
     pub pcsx2_process_handle: ProcessHandle,
-    pub ee_base_address: usize,
 }
 
 impl Ps2Memory for Ps2SeparateProcess {
     fn read<T: Copy>(&self, address: u32) -> T {
-        let mapped_addr = remap_ps2_address(address, self.ee_base_address as u32);
-        log::debug!("mapped {:x} to {:x}", address, mapped_addr);
+        let mapped_addr = remap_ps2_address(address);
         DataMember::new_offset(self.pcsx2_process_handle, vec![mapped_addr as usize])
             .read()
             .unwrap()
     }
 }
 
-fn remap_ps2_address(address: u32, ee_base_address: u32) -> u32 {
+fn remap_ps2_address(address: u32) -> u32 {
     match address {
-        0x00000000..=0x01FFFFFF => ee_base_address + address,
-        0x20000000..=0x21FFFFFF => ee_base_address + address - 0x20000000,
-        0x30000000..=0x31FFFFFF => ee_base_address + address - 0x30000000,
+        0x00000000..=0x01FFFFFF => EE_BASE_ADDRESS + address,
+        0x20000000..=0x21FFFFFF => EE_BASE_ADDRESS + address - 0x20000000,
+        0x30000000..=0x31FFFFFF => EE_BASE_ADDRESS + address - 0x30000000,
         _ => panic!("unsupported PS2 pointer address {:x}", address),
     }
 }
@@ -92,9 +92,7 @@ pub struct Ps2InProcess;
 
 impl Ps2Memory for Ps2InProcess {
     fn read<T: Copy>(&self, address: u32) -> T {
-        // TODO: check whether any memory mapping is required in-process or whether we can read the address directly
-        // I don't know enough about how the emulator works...
-        let mapped_addr = remap_ps2_address(address, 0x20000000);
+        let mapped_addr = remap_ps2_address(address);
         LocalMember::new_offset(vec![mapped_addr as usize])
             .read()
             .unwrap()

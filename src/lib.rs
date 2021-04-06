@@ -6,7 +6,7 @@ use simplelog::{
     ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger, TerminalMode,
     ThreadLogMode, WriteLogger,
 };
-use std::{fs::File, io::Write, ptr::null_mut, thread};
+use std::{fs::File, ptr::null_mut, thread};
 use winapi::um::{
     consoleapi::AllocConsole,
     winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},

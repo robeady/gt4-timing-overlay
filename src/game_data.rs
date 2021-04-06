@@ -166,10 +166,8 @@ impl GameData<Ps2InProcess> {
 
 impl GameData<Ps2SeparateProcess> {
     pub fn connect(process_handle: ProcessHandle) -> Self {
-        let ee_base_address = 0x2000_0000;
         return GameData {
             ps2: Ps2SeparateProcess {
-                ee_base_address,
                 pcsx2_process_handle: process_handle,
             },
             car_checkpoints: [
