@@ -166,38 +166,7 @@ impl GameData<Ps2InProcess> {
 
 impl GameData<Ps2SeparateProcess> {
     pub fn connect(process_handle: ProcessHandle) -> Self {
-        println!("Finding cars");
-        let mut cars_sig = Vec::new();
-        cars_sig.extend_from_slice(&[0xFF; 64]); // these are the NaNs
-        cars_sig.extend_from_slice(&[0xA3, 0x70, 0x7D, 0x3F]);
-        let offsets = scan_memory::find_all_offsets(&cars_sig, process_handle);
-        println!("Found cars at {:?}", offsets);
-
-        if offsets.len() != 5 {
-            println!(
-                "found {} NaN blocks at {:?}, expected 5",
-                offsets.len(),
-                offsets
-            );
-            return GameData {
-                ps2: Ps2SeparateProcess {
-                    ee_base_address: 0,
-                    pcsx2_process_handle: process_handle,
-                },
-                car_checkpoints: [
-                    BTreeMap::new(),
-                    BTreeMap::new(),
-                    BTreeMap::new(),
-                    BTreeMap::new(),
-                    BTreeMap::new(),
-                    BTreeMap::new(),
-                ],
-                race_time: 0,
-            };
-        }
-
-        let ee_base_address = offsets[0] - FIRST_NAN_OFFSET_FROM_EE_BASE;
-
+        let ee_base_address = 0x2000_0000;
         return GameData {
             ps2: Ps2SeparateProcess {
                 ee_base_address,
