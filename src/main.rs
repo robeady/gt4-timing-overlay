@@ -1,5 +1,7 @@
 use game_data::GameData;
+use log::LevelFilter;
 use process_memory::{Architecture, Pid, ProcessHandleExt, TryIntoProcessHandle};
+use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode};
 use ui::render_ui;
 use window::App;
 
@@ -15,6 +17,18 @@ pub struct Locations {
 }
 
 fn main() {
+    let log_config = ConfigBuilder::new()
+        .set_thread_level(LevelFilter::Error)
+        .set_thread_mode(ThreadLogMode::Both)
+        .build();
+    TermLogger::init(
+        LevelFilter::Debug,
+        log_config.clone(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )
+    .unwrap();
+
     let pid = processes::get_pcsx2_process_id();
     let handle = (pid as Pid)
         .try_into_process_handle()
