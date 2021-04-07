@@ -6,7 +6,12 @@ use simplelog::{
     ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger, TerminalMode,
     ThreadLogMode, WriteLogger,
 };
-use std::{fs::File, ptr::null_mut, thread};
+use std::{
+    fs::File,
+    panic::{catch_unwind, AssertUnwindSafe},
+    ptr::null_mut,
+    thread,
+};
 use winapi::um::{
     consoleapi::AllocConsole,
     winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
@@ -25,7 +30,13 @@ pub struct Gt4TimingRenderLoop<M: Ps2Memory> {
 
 impl<M: Ps2Memory> RenderLoop for Gt4TimingRenderLoop<M> {
     fn render(&mut self, ctx: RenderContext) {
-        ui::render_ui(ctx.frame, [320., 300.], &mut self.game_data, true)
+        // I have no clue if this really is unwind safe, but this function is called by native code, and exposing it to rust panics cannot possibly be better
+        if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
+            let scale = ctx.display_size[1] / 480.0;
+            ui::render_ui(ctx.frame, [320., 300.], &mut self.game_data, true, scale)
+        })) {
+            log::error!("{:?}", e);
+        }
     }
 
     fn is_visible(&self) -> bool {
@@ -33,6 +44,10 @@ impl<M: Ps2Memory> RenderLoop for Gt4TimingRenderLoop<M> {
     }
     fn is_capturing(&self) -> bool {
         true
+    }
+
+    fn init(&mut self, imgui_context: &mut imgui::Context) {
+        ui::init_ui(imgui_context, 1.0);
     }
 }
 

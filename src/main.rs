@@ -2,7 +2,7 @@ use game_data::GameData;
 use log::LevelFilter;
 use process_memory::{Architecture, Pid, ProcessHandleExt, TryIntoProcessHandle};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode};
-use ui::render_ui;
+use ui::{init_ui, render_ui};
 use window::App;
 
 mod game_data;
@@ -35,6 +35,7 @@ fn main() {
     let mut game_data = GameData::connect(handle);
 
     let window_size = [400.0, 300.0];
-    let app = App::init("GT4 timing", window_size);
-    app.main_loop(move |ui| render_ui(ui, window_size, &mut game_data, false), || {});
+    let mut app = App::init("GT4 timing", window_size);
+    init_ui(&mut app.imgui, app.dpi_factor);
+    app.main_loop(move |ui| render_ui(ui, window_size, &mut game_data, false, 1.0), || {});
 }

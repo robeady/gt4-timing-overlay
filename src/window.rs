@@ -5,7 +5,7 @@ use glium::glutin::{
     event::{Event, WindowEvent},
 };
 use glium::{Display, Surface};
-use imgui::{Context, FontConfig, FontSource, Ui};
+use imgui::{Context, Ui};
 use imgui_glium_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::time::Instant;
@@ -16,7 +16,7 @@ pub struct App {
     pub imgui: Context,
     pub platform: WinitPlatform,
     pub renderer: Renderer,
-    pub font_size: f32,
+    pub dpi_factor: f64,
 }
 
 impl App {
@@ -39,17 +39,11 @@ impl App {
             platform.attach_window(imgui.io_mut(), window, HiDpiMode::Rounded);
         }
 
-        let hidpi_factor = platform.hidpi_factor();
-        let font_size = (13.0 * hidpi_factor) as f32;
-        imgui.fonts().add_font(&[FontSource::DefaultFontData {
-            config: Some(FontConfig { size_pixels: font_size, ..FontConfig::default() }),
-        }]);
-
-        imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+        let dpi_factor = platform.hidpi_factor();
 
         let renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize renderer");
 
-        App { event_loop, display, imgui, platform, renderer, font_size }
+        App { event_loop, display, imgui, platform, renderer, dpi_factor }
     }
 
     pub fn main_loop<F: FnMut(&mut Ui) + 'static>(
