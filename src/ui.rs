@@ -26,35 +26,21 @@ pub fn render_ui<M: Ps2Memory>(
     let colors = ui.push_style_color(StyleColor::WindowBg, [0.0, 0.0, 0.0, 0.5]);
 
     Window::new(im_str!("Timing"))
-        .title_bar(false)
+        .title_bar(movable)
         .resizable(false)
         .movable(movable)
         .position([0f32, 0f32], Condition::Appearing)
         .size(window_size, Condition::Appearing)
         .build(ui, || {
             if let Ok(r) = race_state {
-                ui.text(im_str!("track is {:.3}km long", r.track_length / 1000.0));
-                ui.separator();
-
                 let mut sorted_car_indices: Vec<_> = (0..(r.cars.len())).collect();
                 sorted_car_indices.sort_by_key(|&i| Reverse(r.cars[i].progress(r.track_length)));
                 for i in sorted_car_indices {
-                    let mass =
-                        r.cars[i].car_spec.get(&game_data.ps2).map(|c| c.mass).unwrap_or(f32::NAN);
                     let name: String = r.entries[i].car_name_short.into();
                     let gap_to_leader = r.gaps_to_leader[i].unwrap_or(f32::NAN) / 1000f32;
-                    let text = im_str!(
-                        "+{:.1} {}  ({:.1} {:.0}kg)",
-                        gap_to_leader,
-                        name,
-                        r.cars[i].meters_driven_in_current_lap,
-                        mass
-                    );
+                    let text = im_str!("+{:.1} {}", gap_to_leader, name);
                     ui.text(text);
                 }
-                ui.separator();
-                let mouse_pos = ui.io().mouse_pos;
-                ui.text(format!("Mouse Position: ({:.1},{:.1})", mouse_pos[0], mouse_pos[1]));
             }
         });
 
