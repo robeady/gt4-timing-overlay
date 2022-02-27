@@ -50,18 +50,6 @@ pub fn render_ui<M: Ps2Memory>(
                         r.cars[i].meters_driven_in_current_lap,
                         mass
                     );
-
-                    let [text_width, text_height] = ui.calc_text_size(&text, false, f32::INFINITY);
-                    let [cursor_x, cursor_y] = ui.cursor_screen_pos();
-                    ui.get_window_draw_list()
-                        .add_rect(
-                            [cursor_x, cursor_y],
-                            [cursor_x + text_width, cursor_y + text_height],
-                            [0.0, 0.0, 0.0, 0.4],
-                        )
-                        .filled(true)
-                        .build();
-
                     ui.text(text);
                 }
                 ui.separator();
