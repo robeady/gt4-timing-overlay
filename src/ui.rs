@@ -1,4 +1,5 @@
 use imgui::*;
+use std::cmp::Reverse;
 
 use crate::{game_data::GameData, ps2_types::Ps2Memory};
 
@@ -22,7 +23,7 @@ pub fn render_ui<M: Ps2Memory>(
     let race_state = game_data.sample_race();
 
     let styles = ui.push_style_var(StyleVar::WindowRounding(0f32));
-    let colors = ui.push_style_color(StyleColor::WindowBg, [0.0, 0.0, 0.0, 0.0]);
+    let colors = ui.push_style_color(StyleColor::WindowBg, [0.0, 0.0, 0.0, 0.5]);
 
     Window::new(im_str!("Timing"))
         .title_bar(false)
@@ -34,7 +35,10 @@ pub fn render_ui<M: Ps2Memory>(
             if let Ok(r) = race_state {
                 ui.text(im_str!("track is {:.3}km long", r.track_length / 1000.0));
                 ui.separator();
-                for i in 0..(r.cars.len()) {
+
+                let mut sorted_car_indices: Vec<_> = (0..(r.cars.len())).collect();
+                sorted_car_indices.sort_by_key(|&i| Reverse(r.cars[i].progress(r.track_length)));
+                for i in sorted_car_indices {
                     let mass =
                         r.cars[i].car_spec.get(&game_data.ps2).map(|c| c.mass).unwrap_or(f32::NAN);
                     let name: String = r.entries[i].car_name_short.into();
