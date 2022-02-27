@@ -4,7 +4,7 @@ use std::cmp::Reverse;
 use crate::{game_data::GameData, ps2_types::Ps2Memory};
 
 pub fn init_ui(imgui: &mut imgui::Context, dpi_factor: f64) {
-    let scaled_font_size = (26.0 * dpi_factor) as f32;
+    let scaled_font_size = (32.0 * dpi_factor) as f32;
     imgui.fonts().add_font(&[FontSource::TtfData {
         data: include_bytes!("../resources/texgyreheros-regular.ttf"),
         size_pixels: scaled_font_size,
