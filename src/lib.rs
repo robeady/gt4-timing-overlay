@@ -33,7 +33,7 @@ impl<M: Ps2Memory> RenderLoop for Gt4TimingRenderLoop<M> {
         // I have no clue if this really is unwind safe, but this function is called by native code, and exposing it to rust panics cannot possibly be better
         if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
             let scale = ctx.display_size[1] / 480.0;
-            ui::render_ui(ctx.frame, [320., 300.], &mut self.game_data, true, scale)
+            ui::render_ui(ctx.frame, [450., 300.], &mut self.game_data, true, scale)
         })) {
             log::error!("{:?}", e);
         }
