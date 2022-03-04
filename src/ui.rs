@@ -39,7 +39,7 @@ pub fn render_ui<M: Ps2Memory>(
                     let name: String = r.entries[i].car_name_short.into();
                     let gap_to_leader = r.gaps_to_leader[i].unwrap_or(f32::NAN) / 1000f32;
                     let text = im_str!(
-                        "+{:.1} {} {}",
+                        "+{:.2} {} {}",
                         gap_to_leader,
                         ["F", "A", "B", "C", "D", "E"][i], // ugh maybe this assumes the player does not qualify
                         name
