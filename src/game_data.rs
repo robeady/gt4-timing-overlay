@@ -1,7 +1,7 @@
 use crate::ps2_types::{
     Ps2InProcess, Ps2Memory, Ps2Ptr, Ps2PtrChain, Ps2SeparateProcess, Ps2String,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use derivative::Derivative;
 use ordered_float::OrderedFloat;
 use process_memory::ProcessHandle;
@@ -140,6 +140,8 @@ pub struct GameData<M: Ps2Memory> {
 
 // offset from EE main memory base to start of NaN block for cars[1]
 const FIRST_NAN_OFFSET_FROM_EE_BASE: usize = 0x01C0EEA4;
+// different in championship races
+const FIRST_NAN_OFFSET_FROM_EE_BASE_CHAMP: usize = 0x01C0F964;
 
 impl GameData<Ps2InProcess> {
     pub fn in_same_process() -> Self {
@@ -184,13 +186,19 @@ pub struct RaceState {
 
 impl<M: Ps2Memory> GameData<M> {
     pub fn sample_race(&mut self) -> Result<RaceState> {
+        log::trace!("finding addresses");
+        let addresses = Addresses::find(&self.ps2).context("no addresses")?;
         // TODO: handle less than 6 cars e.g. special events
         // TODO: handle practice mode. not sure what goes wrong.
-        let cars = CARS.get(&self.ps2)?.to_vec();
-        let entries = ENTRIES.get(&self.ps2)?.to_vec();
-        let track_length = TRACK_LENGTH.get(&self.ps2)?;
+        log::trace!("getting cars");
+        let cars = addresses.cars.get(&self.ps2)?.to_vec();
+        log::trace!("getting entries");
+        let entries = addresses.entries.get(&self.ps2)?.to_vec();
+        log::trace!("getting track length");
+        let track_length = addresses.track_length.get(&self.ps2)?;
         {
-            let new_race_time = RACE_TIME.get(&self.ps2)?;
+            log::trace!("getting race time");
+            let new_race_time = addresses.race_time.get(&self.ps2)?;
             if new_race_time < self.race_time {
                 for i in 0..MAX_CARS {
                     self.car_checkpoints[i].clear()
@@ -252,18 +260,49 @@ impl<M: Ps2Memory> GameData<M> {
     }
 }
 
-const CARS: Ps2Ptr<[Automobile; MAX_CARS]> = Ps2Ptr::new(
-    (
-        FIRST_NAN_OFFSET_FROM_EE_BASE
-    - BEFORE_NANS  // go to start of Automobile struct
-    - size_of::<Automobile>()
-        //  that was entry 1, go to entry 0
-    ) as u32,
-);
+struct Addresses {
+    cars: Ps2Ptr<[Automobile; MAX_CARS]>,
+    entries: Ps2Ptr<[Entry; MAX_CARS]>,
+    race_time: Ps2Ptr<TimeMs>,
+    track_length: Ps2PtrChain<f32>,
+}
 
-const ENTRIES: Ps2Ptr<[Entry; MAX_CARS]> =
-    Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0x2E0A4);
-
-const RACE_TIME: Ps2Ptr<TimeMs> = Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0xA4A0);
-
-const TRACK_LENGTH: Ps2PtrChain<f32> = Ps2PtrChain::new(&[0x01BF52FC, 404, 20]);
+impl Addresses {
+    fn find(ps2_memory: &impl Ps2Memory) -> Option<Addresses> {
+        if f32::is_nan(Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32).get(ps2_memory).unwrap()) {
+            log::trace!("trying normal addresses");
+            Some(Addresses {
+                cars: Ps2Ptr::new(
+                    (
+                        FIRST_NAN_OFFSET_FROM_EE_BASE
+                    - BEFORE_NANS  // go to start of Automobile struct
+                    - size_of::<Automobile>()
+                        //  that was entry 1, go to entry 0
+                    ) as u32,
+                ),
+                entries: Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0x2E0A4),
+                race_time: Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE as u32 - 0xA4A0),
+                track_length: Ps2PtrChain::new(vec![0x01BF52FC, 404, 20]),
+            })
+        } else if f32::is_nan(
+            Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE_CHAMP as u32).get(ps2_memory).unwrap(),
+        ) {
+            log::trace!("trying champ addresses");
+            Some(Addresses {
+                cars: Ps2Ptr::new(
+                    (
+                        FIRST_NAN_OFFSET_FROM_EE_BASE_CHAMP
+                    - BEFORE_NANS  // go to start of Automobile struct
+                    - size_of::<Automobile>()
+                        //  that was entry 1, go to entry 0
+                    ) as u32,
+                ),
+                entries: Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE_CHAMP as u32 - 0x2E0A4),
+                race_time: Ps2Ptr::new(FIRST_NAN_OFFSET_FROM_EE_BASE_CHAMP as u32 - 0xA4A0),
+                track_length: Ps2PtrChain::new(vec![0x01BF5DBC, 404, 20]),
+            })
+        } else {
+            None
+        }
+    }
+}

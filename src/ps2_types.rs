@@ -22,15 +22,15 @@ impl<T: Copy> Ps2Ptr<T> {
     }
 }
 
-pub struct Ps2PtrChain<'a, T>(&'a [u32], PhantomData<T>);
+pub struct Ps2PtrChain<T>(Vec<u32>, PhantomData<T>);
 
-impl<'a, T> Ps2PtrChain<'a, T> {
-    pub const fn new(offsets: &'a [u32]) -> Self {
+impl<T> Ps2PtrChain<T> {
+    pub const fn new(offsets: Vec<u32>) -> Self {
         Self(offsets, PhantomData)
     }
 }
 
-impl<'a, T: Copy> Ps2PtrChain<'a, T> {
+impl<T: Copy> Ps2PtrChain<T> {
     pub fn get<M: Ps2Memory>(&self, ps2_memory: &M) -> Result<T> {
         let mut ptr = 0u32;
         let (&last_offset, offsets) = self.0.split_last().expect("pointer chain has no offsets");
