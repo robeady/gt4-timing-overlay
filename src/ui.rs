@@ -27,7 +27,7 @@ pub fn render_ui<M: Ps2Memory>(
 
     Window::new(im_str!("Timing"))
         .title_bar(movable)
-        .resizable(false)
+        .resizable(movable)
         .movable(movable)
         .position([0f32, 0f32], Condition::Appearing)
         .size(window_size, Condition::Appearing)
