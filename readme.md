@@ -2,6 +2,10 @@
 
 This project implements a live timing HUD for Gran Turismo 4, so you can see live gaps to other cars.
 
+![HUD screenshot](screenshot2.jpg)
+
+![HUD screenshot](screenshot.png)
+
 It works by reading the memory of the game running in the PCSX2 emulator in 32-bit mode.
 
 It can be run as a standalone window or injected as a HUD into the render loop of the emulator.
